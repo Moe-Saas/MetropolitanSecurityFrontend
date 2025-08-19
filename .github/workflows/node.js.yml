@@ -30,9 +30,6 @@ jobs:
     - name: Install dependencies
       run: npm install --no-audit --no-fund --prefer-offline
 
-    - name: Build application
-      run: npm run build
-
     - name: Stop existing PM2 process
       run: pm2 stop "react-app" || true
 
