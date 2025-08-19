@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'frontend-app',
+      name: 'react-app',
       script: 'npm',
       args: 'run start',
       autorestart: true,
