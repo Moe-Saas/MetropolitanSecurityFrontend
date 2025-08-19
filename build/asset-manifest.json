@@ -1,0 +1,16 @@
+{
+  "files": {
+    "main.css": "/static/css/main.5f2c09bb.css",
+    "main.js": "/static/js/main.bbe4ae40.js",
+    "static/media/ms-logo-trp.png": "/static/media/ms-logo-trp.9eb2eb57e20415c82373.png",
+    "static/media/ms-logo.png": "/static/media/ms-logo.1360006e4e871564bee6.png",
+    "static/media/de-logo-white.png": "/static/media/de-logo-white.cbf55aa736506039d805.png",
+    "index.html": "/index.html",
+    "main.5f2c09bb.css.map": "/static/css/main.5f2c09bb.css.map",
+    "main.bbe4ae40.js.map": "/static/js/main.bbe4ae40.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.5f2c09bb.css",
+    "static/js/main.bbe4ae40.js"
+  ]
+}
