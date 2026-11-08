@@ -42,7 +42,6 @@ jobs:
         env:
           REACT_APP_BASEURL: ${{ vars.REACT_APP_BASEURL }}
           REACT_APP_MediaURL: ${{ vars.REACT_APP_MediaURL }}
-          # Keep the EC2 from running out of memory / CPU during the build.
           GENERATE_SOURCEMAP: "false"
           NODE_OPTIONS: --max-old-space-size=1536
         run: nice -n 10 npm run build
