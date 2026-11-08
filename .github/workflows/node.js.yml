@@ -1,45 +1,65 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
-
-name: Node.js CI
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: ["main"]
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time; never kill a running build/deploy halfway.
+concurrency:
+  group: deploy-frontend-production
+  cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: self-hosted
-
-    strategy:
-      matrix:
-        node-version: [22.x]
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+    timeout-minutes: 30 # a hung build must not block the EC2 runner forever
 
     steps:
-      - name: Fix permissions
-        run: |
-          sudo chown -R $USER:$USER /home/ubuntu/frontend/_work
-      - uses: actions/checkout@v4
-      - name: Use Node.js ${{ matrix.node-version }}
+      # clean: false keeps node_modules between deploys (faster, less disk/CPU churn).
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
-          cache: "npm"
-      - name: Clean npm cache
-        run: npm cache clean --force
+          node-version: 22
+
+      - name: Validate build configuration
+        env:
+          REACT_APP_BASEURL: ${{ vars.REACT_APP_BASEURL }}
+          REACT_APP_MediaURL: ${{ vars.REACT_APP_MediaURL }}
+        run: |
+          test -n "$REACT_APP_BASEURL" || (echo "Missing repository variable REACT_APP_BASEURL" && exit 1)
+          test -n "$REACT_APP_MediaURL" || (echo "Missing repository variable REACT_APP_MediaURL" && exit 1)
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci --no-audit --no-fund --prefer-offline
 
-      - name: Stop existing PM2 process
-        run: pm2 stop "react-app" || true
+      - name: Build
+        env:
+          REACT_APP_BASEURL: ${{ vars.REACT_APP_BASEURL }}
+          REACT_APP_MediaURL: ${{ vars.REACT_APP_MediaURL }}
+          # Keep the EC2 from running out of memory / CPU during the build.
+          GENERATE_SOURCEMAP: "false"
+          NODE_OPTIONS: --max-old-space-size=1536
+        run: nice -n 10 npm run build
 
-      - name: Delete existing PM2 process
-        run: pm2 delete "react-app" || true
+      - name: Publish build
+        run: |
+          DEPLOY_DIR="$HOME/frontend-deploy"
+          mkdir -p "$DEPLOY_DIR"
+          rsync -a --delete build/ "$DEPLOY_DIR/"
 
-      - name: Start with PM2
-        run: pm2 start npm --name "react-app" -- start
+      - name: Restart with PM2
+        run: |
+          pm2 startOrRestart pm2.config.js --only react-app --update-env
+          pm2 save --force
 
-      - name: Save PM2 configuration
-        run: pm2 save --force
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf build
+          npm cache clean --force || true
