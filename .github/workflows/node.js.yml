@@ -5,27 +5,26 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# One deploy at a time; never kill a running build/deploy halfway.
 concurrency:
   group: deploy-frontend-production
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    runs-on: self-hosted
-    timeout-minutes: 30 # a hung build must not block the EC2 runner forever
+  # Heavy work (npm install + build) runs on GitHub's hosted runner,
+  # so the EC2 only receives the finished static files.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      # clean: false keeps node_modules between deploys (faster, less disk/CPU churn).
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          clean: false
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Validate build configuration
         env:
@@ -43,22 +42,44 @@ jobs:
           REACT_APP_BASEURL: ${{ vars.REACT_APP_BASEURL }}
           REACT_APP_MediaURL: ${{ vars.REACT_APP_MediaURL }}
           GENERATE_SOURCEMAP: "false"
-          NODE_OPTIONS: --max-old-space-size=1536
-        run: nice -n 10 npm run build
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: build/
+          if-no-files-found: error
+          retention-days: 1
+
+  # The EC2 only downloads the build and restarts PM2 (very light).
+  deploy:
+    needs: build
+    runs-on: self-hosted
+    timeout-minutes: 10
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: ${{ runner.temp }}/frontend-build
 
       - name: Publish build
+        env:
+          BUILD_DIR: ${{ runner.temp }}/frontend-build
         run: |
           DEPLOY_DIR="$HOME/frontend-deploy"
           mkdir -p "$DEPLOY_DIR"
-          rsync -a --delete build/ "$DEPLOY_DIR/"
+          rsync -a --delete "$BUILD_DIR/" "$DEPLOY_DIR/"
 
+      # pm2.config.js isn't checked out on the EC2, so serve directly.
       - name: Restart with PM2
         run: |
-          pm2 startOrRestart pm2.config.js --only react-app --update-env
+          pm2 delete react-app || true
+          pm2 serve "$HOME/frontend-deploy" 3000 --spa --name react-app
           pm2 save --force
 
       - name: Cleanup
         if: always()
-        run: |
-          rm -rf build
-          npm cache clean --force || true
+        run: rm -rf "${{ runner.temp }}/frontend-build"
