@@ -36,7 +36,7 @@ jobs:
           test -n "$REACT_APP_MediaURL" || (echo "Missing repository variable REACT_APP_MediaURL" && exit 1)
 
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund --prefer-offline
+        run: npm install --force
 
       - name: Build
         env:
