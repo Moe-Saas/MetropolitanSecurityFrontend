@@ -11,10 +11,10 @@ export default function AddAlert({AddFunction}) {
   let [isOpen, setIsOpen] = useState(false)
   const [state,setState]=useState(null);
   useEffect(()=>{
-    setState({
-      ...state,
+    setState(s=>({
+      ...s,
       date:new Date()
-    })
+    }))
   },[]);
   const handleInput=(e)=>{
     setState({
